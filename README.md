@@ -205,6 +205,9 @@ The application includes public reading views, authentication screens, an author
 
 ![QuickBlog home page](docs/screenshots/home.jpeg)
 ![QuickBlog admin dashboard](docs/screenshots/admin_dashboard.jpeg)
+![QuickBlog add Blog page](docs/screenshots/add-blog.jpeg)
+![QuickBlog my Blogs page](docs/screenshots/my-blogs.jpeg)
+![QuickBlog profile page](docs/screenshots/profile.jpeg)
 
 
 For the cleanest GitHub presentation, capture the home page, blog detail page, author editor, and admin dashboard after configuring the local services.
