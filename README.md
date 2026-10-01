@@ -203,8 +203,8 @@ The Express API is grouped under:
 The application includes public reading views, authentication screens, an author workspace, and an admin dashboard. Add captured images to `docs/screenshots/` and reference them here as the project evolves:
 
 ```markdown
-![QuickBlog home page](docs/screenshots/home.png)
-![QuickBlog admin dashboard](docs/screenshots/admin-dashboard.png)
+![QuickBlog home page](docs/screenshots/home.jpeg)
+![QuickBlog admin dashboard](docs/screenshots/admin_dashboard.jpeg)
 ```
 
 For the cleanest GitHub presentation, capture the home page, blog detail page, author editor, and admin dashboard after configuring the local services.
