@@ -224,4 +224,4 @@ For the cleanest GitHub presentation, capture the home page, blog detail page, a
 
 ## License
 
-No license has been declared for this repository yet. Add a license file before publishing the project for reuse by others.c
+No license has been declared for this repository yet. Add a license file before publishing the project for reuse by others
