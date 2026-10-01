@@ -95,8 +95,8 @@ QuickBlog/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/quickblog.git
-cd quickblog
+git clone https://github.com/Ghoshal12345/QuickBlog--AI-Powered-Blogging-Platform.git
+cd QuickBlog--AI-Powered-Blogging-Platform
 ```
 
 ### 2. Install dependencies
