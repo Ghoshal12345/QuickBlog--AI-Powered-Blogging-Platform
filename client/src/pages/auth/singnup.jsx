@@ -12,12 +12,15 @@ function SignUp() {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState("");
+
 
     const [step, setStep] = useState(1); // Step state for multi-step form
     const [otp, setOtp] = useState(""); // OTP state for verification
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setFormError("");
         setIsSubmitting(true);
 
         try {
@@ -37,12 +40,12 @@ function SignUp() {
             }
             else if (step === 3) {
                 setIsSubmitting(true);
-                if(password.length < 6) {
+                if (password.length < 6) {
                     toast.error("Password must be at least 6 characters long");
                     setIsSubmitting(false);
                     return;
                 }
-                if(password !== confirmPassword) {
+                if (password !== confirmPassword) {
                     toast.error("Passwords do not match");
                     setIsSubmitting(false);
                     return;
@@ -52,8 +55,17 @@ function SignUp() {
                 navigate("/login"); // Redirect to login page after successful signup
             }
         } catch (error) {
-            toast.error(error.response?.data?.message || "Signup failed");
-            console.error(error.response?.data?.message || "Signup failed");
+            const response = error.response?.data;
+            if (response?.errors?.length > 0) {
+                // Zod validation error: stays visible in the form
+                setFormError(response.errors[0].message);
+            } else {
+                // Business logic / server error: temporary toast
+                toast.error(response?.message || "Signup failed");
+            }
+            console.error("Signup error:", response?.message || error);
+            // toast.error(error.response?.data?.message || "Signup failed");
+            // console.error(error.response?.data?.message || "Signup failed");
         } finally {
             setIsSubmitting(false);
         }
@@ -208,7 +220,21 @@ function SignUp() {
                         )}
 
                     </AnimatePresence>
-
+                    <AnimatePresence>
+                        {formError && (
+                            <motion.div
+                                key="form-error"
+                                role="alert"
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.22, ease: "easeOut" }}
+                                className="mb-4 rounded-md border-l-4 border-red-500 bg-red-50 px-3 py-2.5 text-sm text-red-600"
+                            >
+                                {formError}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     <motion.button
                         type="submit"
                         disabled={isSubmitting}

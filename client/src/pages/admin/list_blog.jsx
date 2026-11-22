@@ -3,7 +3,7 @@ import BlogTableItem from '../../components/admin/BlogTableItem';
 // import { blog_data} from '../../assets/assets';
 // import { useSelector } from 'react-redux';
 import api from "../../api/axios.js";
-// import toast from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { AdminBlogsSkeleton } from '../../components/ui/skeletons.jsx';
 import { motion } from 'motion/react';
 
@@ -19,6 +19,7 @@ function List_blog() {
             const { data } = await api.get('/api/admin/blogs');
             setBlogs(data.blogs);
         } catch (error) {
+            toast.error("Failed to fetch blogs. Please try again later.");
             console.error('Error fetching blogs:', error);
         } finally {
             setLoading(false);

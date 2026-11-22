@@ -24,9 +24,7 @@ function MyBlogs() {
             setBlogs(data.blogs || []);
         } catch (error) {
             console.error("Error fetching blogs:", error);
-            toast.error(
-                error.response?.data?.message || "Failed to load your blogs"
-            );
+            toast.error( error.response?.data?.message || "Failed to load your blogs");
         } finally {
             setLoading(false);
         }
@@ -35,7 +33,6 @@ function MyBlogs() {
     useEffect(() => {
         fetchBlogs();
     }, []);
-
 
     // Delete Blog
     const handleDelete = async (blogId) => {
@@ -46,10 +43,10 @@ function MyBlogs() {
             toast.success("Blog deleted successfully");
             setBlogToDelete(null);
         } catch (error) {
-            console.error("Error deleting blog:", error);
-            toast.error(
-                error.response?.data?.message || "Failed to delete the blog"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error deleting blog";
+            toast.error(message);
+            console.error("Error deleting blog:", message || error);
         } finally {
             setDeletingId(null);
         }
@@ -66,11 +63,10 @@ function MyBlogs() {
             );
             await fetchBlogs();
         } catch (error) {
-            console.error("Error updating publish status:", error);
-            toast.error(
-                error.response?.data?.message ||
-                "Failed to update publish status"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error toggling publish status";
+            toast.error(message);
+            console.error("Error toggling publish status:", message || error);
         } finally {
             setIsToggling(false);
         }

@@ -24,8 +24,10 @@ function Comments() {
             const { data } = await api.get('/api/admin/comments');
             setComments(data.comments);
         } catch (error) {
-            toast.error("Error fetching comments");
-            console.error("Error fetching comments:", error);
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error fetching comments";
+            toast.error(message);
+            console.error("Error fetching comments:", message || error);
         } finally {
             setLoading(false);
         }
@@ -38,8 +40,10 @@ function Comments() {
             toast.success("Comment approved successfully");
             await fetchComments();
         } catch (error) {
-            toast.error("Error approving comment");
-            console.error("Error approving comment:", error);
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error approving comment";
+            toast.error(message);
+            console.error("Error approving comment:", message || error);
         } finally {
             setApprovingId(null);
         }
@@ -48,13 +52,15 @@ function Comments() {
     const deleteComment = async (commentId) => {
         try {
             setIsDeleting(true);
-            await api.delete('/api/admin/comments/' + commentId);
+            await api.delete(`/api/blog/comment/${commentId}`);
             toast.success("Comment deleted successfully");
             setCommentToDelete(null);
             await fetchComments();
         } catch (error) {
-            toast.error("Error deleting comment");
-            console.error("Error deleting comment:", error);
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error deleting comment";
+            toast.error(message);
+            console.error("Error deleting comment:", message || error);
         } finally {
             setIsDeleting(false);
         }

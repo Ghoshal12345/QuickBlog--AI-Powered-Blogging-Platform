@@ -7,6 +7,15 @@ import toast from 'react-hot-toast';
 import { EditBlogSkeleton } from '../../components/ui/skeletons.jsx';
 import { motion, AnimatePresence } from 'motion/react';
 
+const isQuillContentEmpty = (html) => {
+    const text = html
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;|&#160;/gi, " ")
+        .trim();
+
+    return text.length === 0;
+};
+
 function Edit_blog() {
 
     const { id } = useParams();
@@ -21,7 +30,7 @@ function Edit_blog() {
     const [title, setTitle] = useState("");
     const [subTitle, setSubTitle] = useState("");
     const [category, setCategory] = useState("Startup");
-    const [isPublished, setIsPublished] = useState(false);
+    const [isPublished, setIsPublished] = useState(true);
     const [description, setDescription] = useState("");
 
     const [loading, setLoading] = useState(true);
@@ -50,7 +59,7 @@ function Edit_blog() {
         }
     }, [loading, description]);
 
-
+    // Fetch the blog data when the component mounts
     useEffect(() => {
         const fetchBlog = async () => {
             try {
@@ -64,19 +73,11 @@ function Edit_blog() {
                 setIsPublished(blog.isPublished);
                 setExistingImage(blog.image || "");
                 setDescription(blog.description || "");
-
-                // if (quillRef.current) {
-                //     quillRef.current.clipboard.dangerouslyPasteHTML(
-                //         blog.description || ""
-                //     );
-                //     // quillRef.current.root.innerHTML = data.content;
-                // }
             } catch (error) {
-                console.error("Error fetching blog:", error);
-                toast.error(
-                    error.response?.data?.message ||
-                    "Failed to load blog"
-                );
+                const response = error.response?.data;
+                const message = response?.errors?.[0]?.message || response?.message || "Error fetching blog data";
+                toast.error(message);
+                console.error("Error fetching blog data:", message || error);
                 navigate("/user/my-blogs", { replace: true });
             } finally {
                 setLoading(false);
@@ -102,11 +103,10 @@ function Edit_blog() {
                 quillRef.current.root.innerHTML = data.content;
             }
         } catch (error) {
-            console.error("Error generating content:", error);
-            toast.error(
-                error.response?.data?.message ||
-                "Failed to generate content"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Failed to generate content";
+            toast.error(message);
+            console.error("Error generating content:", message || error);
         } finally {
             setIsGenerating(false);
         }
@@ -115,8 +115,9 @@ function Edit_blog() {
 
     const onSubmitHandler = async (e) => {
         e.preventDefault();
-        const description = quillRef.current?.root.innerHTML;
-        if (!description || description === "<p><br></p>") {
+
+        const description = quillRef.current.root.innerHTML;
+        if (isQuillContentEmpty(description)) {
             toast.error("Please write some blog content");
             return;
         }
@@ -125,9 +126,9 @@ function Edit_blog() {
 
         formData.append("title", title);
         formData.append("subTitle", subTitle);
+        formData.append("description", description);
         formData.append("category", category);
         formData.append("isPublished", isPublished);
-        formData.append("description", description);
 
         // Only send image if user selected a new one
         if (image) {
@@ -140,12 +141,10 @@ function Edit_blog() {
             toast.success("Blog updated successfully");
             navigate("/blog/" + id, { replace: true });
         } catch (error) {
-
-            console.error("Error updating blog:", error);
-            toast.error(
-                error.response?.data?.message ||
-                "Failed to update blog"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error updating blog";
+            toast.error(message);
+            console.error("Error updating blog:", message || error);
         } finally {
             setIsUpdating(false);
         }

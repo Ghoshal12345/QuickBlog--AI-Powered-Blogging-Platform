@@ -50,15 +50,14 @@ function Blog() {
                 data.blog.comments
             );
         } catch (error) {
-            console.error("Error fetching blog data:", error);
+            const response = error.response?.data;
             if (error.response?.status === 404) {
                 navigate("/blog-not-found", { replace: true });
                 return;
             }
-            toast.error(
-                error.response?.data?.message ||
-                "Failed to load blog"
-            );
+            const message = response?.errors?.[0]?.message || response?.message || "Failed to load blog";
+            toast.error(message);
+            console.error("Failed to load blog:", message || error);
         }
     };
 
@@ -82,21 +81,13 @@ function Blog() {
                     blogId
                 }
             );
-            setNewComment({
-                content: ''
-            });
-            toast.success(
-                "Comment added for review. It will be visible once approved."
-            );
+            setNewComment({content: ''});
+            toast.success("Comment added for review. It will be visible once approved.");
         } catch (error) {
-            console.error(
-                "Error adding comment:",
-                error
-            );
-            toast.error(
-                error.response?.data?.message ||
-                "Failed to add comment"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error adding comments";
+            toast.error(message);
+            console.error("Error adding comments:", message || error);
         } finally {
             setIsAddingComment(false);
         }
@@ -126,14 +117,10 @@ function Blog() {
             setEditContent('');
             await fetchBlogDataAndComments();
         } catch (error) {
-            console.error(
-                "Error editing comment:",
-                error
-            );
-            toast.error(
-                error.response?.data?.message ||
-                "Failed to update comment"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error editing comments";
+            toast.error(message);
+            console.error("Error editing comments:", message || error);
         } finally {
             setIsEditingComment(false);
         }
@@ -153,8 +140,10 @@ function Blog() {
             setCommentToDelete(null);
             await fetchBlogDataAndComments();
         } catch (error) {
-            toast.error(error.response?.data?.message || "Failed to delete comment");
-            console.error("Error deleting comment:", error);
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Error deleting comments";
+            toast.error(message);
+            console.error("Error deleting comments:", message || error);
         } finally {
             setIsDeletingComment(false);
         }
@@ -728,9 +717,6 @@ function Blog() {
     ) : (
         <BlogSkeleton />
     );
-
-
-
 }
 
 export default Blog;

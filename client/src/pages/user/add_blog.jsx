@@ -6,6 +6,15 @@ import api from '../../api/axios.js';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'motion/react';
 
+const isQuillContentEmpty = (html) => {
+    const text = html
+        .replace(/<[^>]*>/g, "")
+        .replace(/&nbsp;|&#160;/gi, " ")
+        .trim();
+
+    return text.length === 0;
+};
+
 function Add_blog() {
     const navigate = useNavigate();
     const editorRef = useRef(null);//reference variables for quill editor
@@ -15,11 +24,12 @@ function Add_blog() {
     const [image, setImage] = useState(false);
     const [title, setTitle] = useState("");
     const [subTitle, setSubTitle] = useState("");
-    const [category, setCategory] = useState("Startup");
+    const [category, setCategory] = useState("Technology");
     const [isPublished, setIsPublished] = useState(true);
 
     const [isAdding, setIsAdding] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [formError, setFormError] = useState("");
 
     const generateContent = async () => {
         if (!title.trim()) {
@@ -29,16 +39,41 @@ function Add_blog() {
 
         try {
             setIsGenerating(true);
-            const { data } = await api.post(
+            const { data: jobData } = await api.post(
                 '/api/blog/generate-content',
-                { prompt: title }
+                { prompt: title.trim() }
             );
-            quillRef.current.root.innerHTML = data.content;
+
+            const { jobId } = jobData;
+            if (!jobId) {
+                throw new Error("AI job ID was not returned");
+            }
+            toast.success("AI blog generation started");
+
+            // Polling for job status until it finishes or fails
+            while (true) {
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
+                const { data: statusData } = await api.get(`/api/blog/generate-content/status/${jobId}`);
+
+                if (statusData.status === "completed") {
+                    // insert into quill editor
+                    quillRef.current.root.innerHTML = statusData.content;
+                    toast.success(
+                        statusData.source === "cache"
+                            ? "AI content loaded from cache"
+                            : "AI blog content generated successfully"
+                    );
+                    break;
+                }
+                if (statusData.status === "failed") {
+                    throw new Error(statusData.message || "AI generation failed");
+                }
+            }
         } catch (error) {
-            console.error("Error generating content:", error);
-            toast.error(
-                error.response?.data?.message || "Failed to generate content"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Failed to generate content";
+            toast.error(message);
+            console.error("Error generating content:", message || error);
         } finally {
             setIsGenerating(false);
         }
@@ -46,6 +81,7 @@ function Add_blog() {
 
     const onSubmitHandler = async (e) => {
         e.preventDefault();
+        setFormError("");
         if (!image) {
             toast.error("Please select a thumbnail");
             return;
@@ -53,7 +89,7 @@ function Add_blog() {
 
         const description = quillRef.current.root.innerHTML;
 
-        if (!description || description === "<p><br></p>") {
+        if (isQuillContentEmpty(description)) {
             toast.error("Please write some blog content");
             return;
         }
@@ -74,14 +110,21 @@ function Add_blog() {
             navigate(`/blog/${data.blog._id}`);
             setTitle("");
             setSubTitle("");
-            setCategory("Startup");
+            setCategory("Technology");
             setIsPublished(true);
             setImage(false);
             quillRef.current.root.innerHTML = "";
             console.log('Blog added successfully:');
         } catch (error) {
-            toast.error('Failed to add blog');
-            console.error('Error adding blog:', error);
+            const response = error.response?.data;
+            if (response?.errors?.length > 0) {
+                // Zod validation error: stays visible in the form
+                setFormError(response.errors[0].message);
+            } else {
+                // Business logic / server error: temporary toast
+                toast.error(response?.message || "Error adding blog");
+            }
+            console.error("Error adding blog:", response?.message || error);
         } finally {
             setIsAdding(false);
         }
@@ -406,9 +449,22 @@ function Add_blog() {
                                 </label>
 
                             </div>
-
                         </motion.div>
-
+                        <AnimatePresence>
+                            {formError && (
+                                <motion.div
+                                    key="form-error"
+                                    role="alert"
+                                    initial={{ opacity: 0, y: -8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -5 }}
+                                    transition={{ duration: 0.22, ease: "easeOut" }}
+                                    className="mb-4 rounded-md border-l-4 border-red-500 bg-red-50 px-3 py-2.5 text-sm text-red-600"
+                                >
+                                    {formError}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
                         <motion.div
                             variants={itemVariants}

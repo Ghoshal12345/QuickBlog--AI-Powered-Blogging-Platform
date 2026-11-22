@@ -2,13 +2,12 @@ import imageKitClient from '../configs/imagekit.js';
 import { toFile } from '@imagekit/nodejs';
 import Blog from '../models/blog.js';
 import Comment from '../models/comment.js';
-import generateContent from '../configs/groqAi.js';
-import mongoose from 'mongoose';
+import { getCache, setCache, deleteCache } from '../utils/cache.js';
+import { aiQueue } from '../queues/ai_queue.js';
+import { redisProducerConnection } from '../configs/redisProducer.js';
 
 async function addBlog(req, res) {
     try {
-
-        // console.log("1. addBlog started");
 
         const {
             title,
@@ -22,40 +21,37 @@ async function addBlog(req, res) {
 
         const imageFile = req.file;
 
-        // console.log("2. Body:", req.body);
-        // console.log("3. File:", imageFile);
 
-        if (
-            !title ||
-            !description ||
-            !category ||
-            !imageFile ||
-            !authorId ||
-            typeof isPublished === 'undefined'
-        ) {
-            return res.status(400).json({
-                message: "Missing required fields"
-            });
-        }
+        // if (
+        //     !title ||
+        //     !description ||
+        //     !category ||
+        //     !imageFile ||
+        //     !authorId ||
+        //     typeof isPublished === 'undefined'
+        // ) {
+        //     return res.status(400).json({
+        //         message: "Missing required fields"
+        //     });
+        // }
 
         const imageFileForImageKit = await toFile(
             imageFile.buffer,
             imageFile.originalname
         );
 
-        // console.log("4. Starting ImageKit upload...");
 
         const response = await imageKitClient.files.upload({
             file: imageFileForImageKit,
             fileName: imageFile.originalname,
         });
 
-        // console.log("5. ImageKit upload completed");
-        // console.log(response);
+        console.log("Uploaded file:", req.file?.originalname);
+        console.log("ImageKit URL:", response.url);
+        console.log("ImageKit file ID:", response.fileId);
 
         const optimizedImageUrl = `${response.url}?tr=w-1280,q-auto,f-webp`;
 
-        // console.log("6. Saving blog to MongoDB...");
         const published = isPublished === 'true' || isPublished === true;
         const blog = await Blog.create({
             title,
@@ -68,7 +64,10 @@ async function addBlog(req, res) {
             author: authorId
         });
 
-        // console.log("7. Blog saved");
+        await deleteCache("blogs:all"); // Invalidate the cache for all blogs
+        await deleteCache("admin:blogs");
+        await deleteCache(`myblogs:${req.user._id}`); // Invalidate the cache for the author's blogs
+        await deleteCache("dashboard:stats");
 
         return res.status(201).json({
             blog,
@@ -85,9 +84,25 @@ async function addBlog(req, res) {
 
 async function getAllBlogs(req, res) {
     try {
-        // console.log("1. Fetching all published blogs...");
+        const cacheKey = "blogs:all";
 
-        const blogs = await Blog.find({ isPublished: true }).sort({ createdAt: -1 });
+        // 1. Check if the blogs are cached in Redis
+        const cachedBlogs = await getCache(cacheKey);
+        if (cachedBlogs) {
+            return res.status(200).json({
+                blogs: cachedBlogs,
+            })
+        }
+
+        // 2. Cache miss → get data from MongoDB
+        const blogs = await Blog.find({ isPublished: true })
+            .select("_id title subTitle description image category")
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // store result in redis
+        await setCache(cacheKey, blogs, 300); // Cache for 5 minutes
+
         res.status(200).json({
             blogs
         });
@@ -104,7 +119,18 @@ async function getAllBlogs(req, res) {
 async function getMyBlogs(req, res) {
     try {
         const userId = req.user._id;
-        const blogs = await Blog.find({ author: userId }).sort({ createdAt: -1 });
+
+        const cacheKey = `myblogs:${userId}`;
+        const cachedBlogs = await getCache(cacheKey);
+        if (cachedBlogs) {
+            return res.status(200).json({ blogs: cachedBlogs });
+        }
+
+        const blogs = await Blog.find({ author: userId })
+            .select("_id title subTitle description category image isPublished")
+            .sort({ createdAt: -1 })
+            .lean();
+        await setCache(cacheKey, blogs, 300);
         res.status(200).json({
             blogs
         });
@@ -119,8 +145,8 @@ async function getMyBlogs(req, res) {
 async function editBlog(req, res) {
 
     try {
-        const { id } = req.params;
-        const blog = await Blog.findById(id);
+        const blogId = req.params.id;
+        const blog = await Blog.findById(blogId);
         if (!blog) {
             return res.status(404).json({
                 message: "Blog not found"
@@ -181,6 +207,12 @@ async function editBlog(req, res) {
         }
         await blog.save();
 
+        await deleteCache("blogs:all"); // Invalidate the cache for all blogs
+        await deleteCache("admin:blogs");
+        await deleteCache(`blog:${blogId}`); // Invalidate the cache for this specific blog 
+        await deleteCache(`myblogs:${blog.author}`); // Invalidate the cache for the author's blogs
+        await deleteCache("dashboard:stats");
+
         return res.status(200).json({
             message: "Blog updated successfully",
             blog
@@ -196,30 +228,36 @@ async function editBlog(req, res) {
 
 async function getBlogById(req, res) {
     // console.log("1. Fetching blog by ID...");
-    const { id } = req.params;
+    const blogId = req.params.id;
     try {
 
-        // Check whether the ID is a valid MongoDB ObjectId
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(404).json({
-                message: "Blog not found"
-            });
+        const cacheKey = `blog:${blogId}`;
+        const cachedBlog = await getCache(cacheKey);
+        if (cachedBlog) {
+            return res.status(200).json({
+                blog: cachedBlog,
+                message: "Blog fetched from cache"
+            })
         }
-        const blog = await Blog.findById(id).populate('author', 'name profileImage').lean(); // Use lean() to get a plain JavaScript object
+        const blog = await Blog.findOne({ _id: blogId, isPublished: true })
+            .select("_id title subTitle description image isPublished createdAt updatedAt")
+            .populate('author', 'name profileImage')
+            .lean(); // Use lean() to get a plain JavaScript object
 
         if (!blog) {
             return res.status(404).json({
                 message: "Blog not found"
             });
         }
-        const comments = await Comment.find({ blogId: id, isApproved: true }).populate('createdBy', 'name profileImage').sort({ createdAt: -1 }).lean();
-        // blog.comments= comments;
-        // console.log("2. Fetched blog:", blog);
+        const comments = await Comment.find({ blogId: blogId, isApproved: true }).populate('createdBy', 'name profileImage').sort({ createdAt: -1 }).lean();
+
+        const blogData = {
+            ...blog,
+            comments
+        };
+        await setCache(cacheKey, blogData, 300); // Cache for 5 minutes
         res.status(200).json({
-            blog: {
-                ...blog,
-                comments
-            }
+            blog: blogData
         });
     } catch (error) {
         console.error("Error fetching blog:", error);
@@ -230,11 +268,11 @@ async function getBlogById(req, res) {
 }
 
 async function deleteBlog(req, res) {
-    const { id } = req.params;
+    const blogId = req.params.id;
 
     try {
         // 1. Fetch the blog first inside the try/catch
-        const blog = await Blog.findById(id);
+        const blog = await Blog.findById(blogId);
 
         if (!blog) {
             return res.status(404).json({ message: "Blog not found" });
@@ -264,7 +302,13 @@ async function deleteBlog(req, res) {
 
         // Delete the blog and its associated comments
         await blog.deleteOne();
-        await Comment.deleteMany({ blogId: id });
+        await Comment.deleteMany({ blogId: blogId });
+
+        await deleteCache("blogs:all"); // Invalidate the cache for all blogs
+        await deleteCache("admin:blogs");
+        await deleteCache(`blog:${blogId}`); // Invalidate the cache for this specific blog
+        await deleteCache(`myblogs:${blog.author}`); // Invalidate the cache for the author's blogs
+        await deleteCache("dashboard:stats");
 
 
         return res.status(200).json({
@@ -278,9 +322,9 @@ async function deleteBlog(req, res) {
 }
 
 async function toggleBlogPublishStatus(req, res) {
-    const { id } = req.body;
+    const blogId = req.body.id;
     try {
-        const blog = await Blog.findById(id);
+        const blog = await Blog.findById(blogId);
         if (!blog) {
             return res.status(404).json({
                 message: "Blog not found"
@@ -297,7 +341,14 @@ async function toggleBlogPublishStatus(req, res) {
             });
         }
         blog.isPublished = !blog.isPublished;
+
         await blog.save();
+        await deleteCache("blogs:all"); // Invalidate the cache for all blogs
+        await deleteCache("admin:blogs");
+        await deleteCache(`blog:${blogId}`); // Invalidate the cache for this specific blog
+        await deleteCache(`myblogs:${blog.author}`); // Invalidate the cache for the author's blogs
+        await deleteCache("dashboard:stats");
+
         return res.status(200).json({
             message: "Blog publish status toggled successfully",
             isPublished: blog.isPublished
@@ -311,39 +362,77 @@ async function toggleBlogPublishStatus(req, res) {
 }
 
 async function generateContentUsingAi(req, res) {
+    if(redisProducerConnection.status !== "ready"){
+        console.error("Redis producer connection is not ready. Current status:", redisProducerConnection.status);
+        return res.status(503).json({
+            message: "Service unavailable. Please try again later."
+        });
+    }
     try {
         const { prompt } = req.body;
+        // const cleanPrompt = prompt.trim();
+        const job = await aiQueue.add(
+            "generateContent",// Job name
+            { prompt: prompt.trim(), userId: req.user._id.toString() },// Job data
+            {
+                jobId: `generateContent-${req.user._id}-${Date.now()}`// Unique job ID
+            }
+        )
+        console.log(`AI generation job queued: ${job.id}, type: ${job.name}`);
+        return res.status(202).json({
+            message: "AI blog generation queued successfully",
+            jobId: job.id,
+            status: "queued",
+        });
+    } catch (error) {
+        console.error("Failed to enqueue AI job:", error);
+        return res.status(500).json({
+            message: "Unable to queue AI generation. Please try again shortly."
+        });
+    }
+}
 
-        if (!prompt?.trim()) {
-            return res.status(400).json({
-                message: "Prompt is required"
+async function getAiJobStatus(req, res) {
+    try {
+        const jobId = req.params.jobId;
+        const job = await aiQueue.getJob(jobId);
+        if (!job) {
+            return res.status(404).json({
+                message: "AI generation job not found or expired"
             });
         }
 
-        const aiPrompt = `
-Write a detailed and engaging blog post about:
+        // A user should only retrive their own 
+        if (job.data.userId !== req.user._id.toString()) {
+            return res.status(403).json({
+                message: "You are not authorized to view this job's status"
+            });
+        }
 
-${prompt}
+        const state = await job.getState();
 
-Generate the blog content as clean HTML that can be directly inserted into a Quill editor.
+        if (state === "completed") {
+            return res.status(200).json({
+                status: "completed",
+                content: job.returnvalue.content,
+                message: job.returnvalue.message || "Content generated successfully",
+                source: job.returnvalue.source || "AI generation"//* what is source: source is the origin of the content, whether it was generated by AI or retrieved from cache.
+            });
+        }
 
-Use only appropriate HTML tags such as:
-<h2>, <h3>, <p>, <strong>, <em>, <ul>, <ol>, <li>.
-
-Do not use Markdown.
-Do not include \`\`\`html or \`\`\` code fences.
-Return only the HTML content.
-`;
-
-        const content = await generateContent(aiPrompt);
+        else if (state === "failed") {
+            return res.status(200).json({
+                status: "failed",
+                message: job.failedReason || "AI generation failed after retries. Please try again."
+            });
+        }
 
         return res.status(200).json({
-            message: "Content generated successfully",
-            content
-        });
-    } catch (error) {
-        console.error("Error generating content:", error);
+            status: state==="active" ? "processing" : "queued",
+        })
 
+    } catch (error) {
+        console.error("Error checking AI job status:", error);
         return res.status(500).json({
             message: "Internal server error"
         });
@@ -358,5 +447,6 @@ export {
     editBlog,
     deleteBlog,
     toggleBlogPublishStatus,
-    generateContentUsingAi
+    generateContentUsingAi,
+    getAiJobStatus
 }

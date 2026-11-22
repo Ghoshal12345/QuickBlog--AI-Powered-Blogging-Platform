@@ -18,6 +18,7 @@ function EditProfile() {
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
     const [name, setName] = useState('');
+    const [originalName, setOriginalName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [originalEmail, setOriginalEmail] = useState('');
 
@@ -42,6 +43,7 @@ function EditProfile() {
             const { data } = await api.get('/api/user/me');
             const { name, email } = data;
             setName(name);
+            setOriginalName(name);
             setNewEmail(email);
             setOriginalEmail(email);
             setExistingImage(data.profileImage || null);
@@ -82,7 +84,6 @@ function EditProfile() {
     };
 
 
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!name.trim() || !newEmail.trim()) {
@@ -93,41 +94,33 @@ function EditProfile() {
 
         try {
             setIsUpdating(true);
-            console.log("step 1");
-            //update name and profile image
+
             const formData = new FormData();
             formData.append('name', name);
-            // formData.append('email', normalizedEmail);
             if (newImage) {
                 formData.append('profileImage', newImage);
             }
-            console.log("step 2", formData);
+
             const { data } = await api.patch('/api/user/profile', formData);
-            console.log("step 3", data);
-            // update redux with latest name and profile image
             dispatch(loginSuccess(data.user));
-            console.log("step 4", data.user);
-            // if Email hasn't changed
+
             if (normalizedEmail === originalEmail) {
                 toast.success("Profile updated successfully");
                 navigate('/user/profile');
                 return;
             }
-            console.log("step 4.1", normalizedEmail, originalEmail);
-            // Email has changed-> request otp
+
             await api.post('/api/user/request-email-change', { newEmail: normalizedEmail });
             toast.success("OTP sent to your new email.");
-            console.log("step 4.2");
+
             setEmailOtp('');
             setShowEmailOtpModal(true);
 
-            console.log("step 4.3");
-            // toast.success("Profile updated successfully");
-            // setIsUpdating(false);
-            // navigate('/user/profile');
         } catch (error) {
-            toast.error(error.response?.data?.message || "Failed to update profile");
-            console.error(error.response?.data?.message || "Error updating profile");
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Failed to update profile";
+            toast.error(message);
+            console.error("Error updating profile:", message || error);
         } finally {
             setIsUpdating(false);
         }
@@ -142,25 +135,16 @@ function EditProfile() {
             setIsVerifyingEmail(true);
             const normalizedEmail = newEmail.trim().toLowerCase();
             const { data } = await api.post('/api/user/verify-email-change', { newEmail: normalizedEmail, otp: emailOtp });
-            console.log("step 5", data);
             dispatch(loginSuccess(data.user));
-            console.log("step 5.1", data.user);
             setShowEmailOtpModal(false);
             setEmailOtp('');
-            console.log("step 5.2");
             toast.success("Email changed successfully");
-            console.log("step 5.3");
             navigate('/user/profile');
         } catch (error) {
-            toast.error(
-                error.response?.data?.message ||
-                "Invalid or expired OTP"
-            );
-
-            console.error(
-                error.response?.data?.message ||
-                "Email verification failed"
-            );
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Invalid or expired OTP";
+            toast.error(message);
+            console.error("Email verification failed:", message || error);
         } finally {
             setIsVerifyingEmail(false);
         }
@@ -192,7 +176,6 @@ function EditProfile() {
     if (isLoading) {
         return (<EditProfileSkeleton />);
     }
-
 
     const displayedImage = imagePreview || existingImage;
 
@@ -228,6 +211,9 @@ function EditProfile() {
         }
     };
 
+    const hasChanges = name.trim() !== originalName ||
+        newEmail.trim().toLowerCase() !== originalEmail.toLowerCase() ||
+        newImage !== null;
 
     return (
 
@@ -465,10 +451,10 @@ function EditProfile() {
                     <motion.button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={isUpdating}
-                        whileHover={!isUpdating ? { scale: 1.03 } : {}}
-                        whileTap={!isUpdating ? { scale: 0.97 } : {}}
-                        className="px-7 py-3 rounded-full bg-primary text-white font-medium hover:opacity-90 transition shadow-lg shadow-primary/15 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+                        disabled={isUpdating || !hasChanges}
+                        whileHover={!isUpdating && hasChanges ? { scale: 1.03 } : {}}
+                        whileTap={!isUpdating && hasChanges ? { scale: 0.97 } : {}}
+                        className="px-7 py-3 rounded-full bg-primary text-white font-medium hover:opacity-90 transition shadow-lg shadow-primary/15 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                         {isUpdating
                             ? "Saving Changes..."

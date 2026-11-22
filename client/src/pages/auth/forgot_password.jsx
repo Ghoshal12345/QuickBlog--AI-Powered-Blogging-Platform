@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 function ForgotPassword() {
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState("");
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -17,6 +18,7 @@ function ForgotPassword() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setFormError("");
         setIsSubmitting(true);
 
         try {
@@ -36,12 +38,12 @@ function ForgotPassword() {
             }
             else if (step === 3) {
                 setIsSubmitting(true);
-                if(password.length < 6) {
+                if (password.length < 6) {
                     toast.error("Password must be at least 6 characters long");
                     setIsSubmitting(false);
                     return;
                 }
-                if(password !== confirmPassword) {
+                if (password !== confirmPassword) {
                     toast.error("Passwords do not match");
                     setIsSubmitting(false);
                     return;
@@ -51,8 +53,17 @@ function ForgotPassword() {
                 navigate("/login"); // Redirect to login page after successful password reset
             }
         } catch (error) {
-            toast.error(error.response?.data?.message || "Password reset failed");
-            console.error(error.response?.data?.message || "Password reset failed");
+            const response = error.response?.data;
+            if (response?.errors?.length > 0) {
+                // Zod validation error: stays visible in the form
+                setFormError(response.errors[0].message);
+            } else {
+                // Business logic / server error: temporary toast
+                toast.error(response?.message || "Password reset failed");
+            }
+            console.error("Password reset error:", response?.message || error);
+            // toast.error(error.response?.data?.message || "Password reset failed");
+            // console.error(error.response?.data?.message || "Password reset failed");
         } finally {
             setIsSubmitting(false);
         }
@@ -231,7 +242,21 @@ function ForgotPassword() {
                         )}
 
                     </AnimatePresence>
-
+                    <AnimatePresence>
+                        {formError && (
+                            <motion.div
+                                key="form-error"
+                                role="alert"
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.22, ease: "easeOut" }}
+                                className="mb-4 rounded-md border-l-4 border-red-500 bg-red-50 px-3 py-2.5 text-sm text-red-600"
+                            >
+                                {formError}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     {/* SUBMIT BUTTON */}
                     <motion.button
                         type="submit"

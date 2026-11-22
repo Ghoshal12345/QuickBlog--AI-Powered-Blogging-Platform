@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom';
 import { assets } from '../../assets/assets';
 import api from "../../api/axios.js";
 import toast from 'react-hot-toast';
@@ -70,10 +71,9 @@ function BlogTableItem({ blog, fetchBlogs, index }) {
                         <p className="font-medium text-gray-700 truncate">
                             {title}
                         </p>
-
-                        <p className="text-xs text-gray-400 mt-1">
-                            Blog article
-                        </p>
+                        {/* <p className="text-xs text-gray-400 mt-1">
+                            {blog?.isPublished ? "Published" : "Unpublished"}
+                        </p> */}
                     </div>
                 </td>
 
@@ -90,14 +90,14 @@ function BlogTableItem({ blog, fetchBlogs, index }) {
                 <td className="px-5 py-4 hidden sm:table-cell">
                     <span
                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${blog?.isPublished
-                                ? "bg-green-50 text-green-600"
-                                : "bg-orange-50 text-orange-600"
+                            ? "bg-green-50 text-green-600"
+                            : "bg-orange-50 text-orange-600"
                             }`}
                     >
                         <span
                             className={`w-1.5 h-1.5 rounded-full mr-2 ${blog?.isPublished
-                                    ? "bg-green-500"
-                                    : "bg-orange-500"
+                                ? "bg-green-500"
+                                : "bg-orange-500"
                                 }`}
                         />
 
@@ -117,8 +117,8 @@ function BlogTableItem({ blog, fetchBlogs, index }) {
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.97 }}
                             className={`px-3 py-1.5 disabled:cursor-not-allowed rounded-full text-xs font-medium border transition cursor-pointer ${blog?.isPublished
-                                    ? "border-orange-200 text-orange-600 hover:bg-orange-50"
-                                    : "border-green-200 text-green-600 hover:bg-green-50"
+                                ? "border-orange-200 text-orange-600 hover:bg-orange-50"
+                                : "border-green-200 text-green-600 hover:bg-green-50"
                                 }`}
                         >
                             {isToggling
@@ -150,101 +150,102 @@ function BlogTableItem({ blog, fetchBlogs, index }) {
 
 
             {/* Delete Confirmation Modal */}
-            <AnimatePresence>
-                {showDeleteModal && (
-                    <motion.div
-                        className="fixed inset-0 z-50 flex items-center justify-center px-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                    >
-
-                        {/* Backdrop */}
-                        <div
-                            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                            onClick={() => {
-                                if (!isDeleting) {
-                                    setShowDeleteModal(false);
-                                }
-                            }}
-                        />
-
-                        {/* Modal */}
+            {createPortal(
+                <AnimatePresence>
+                    {showDeleteModal && (
                         <motion.div
-                            className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6"
-                            initial={{
-                                opacity: 0,
-                                scale: 0.95,
-                                y: 15
-                            }}
-                            animate={{
-                                opacity: 1,
-                                scale: 1,
-                                y: 0
-                            }}
-                            exit={{
-                                opacity: 0,
-                                scale: 0.95,
-                                y: 15
-                            }}
-                            transition={{
-                                duration: 0.25,
-                                ease: "easeOut"
-                            }}
+                            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
                         >
+                            {/* Backdrop */}
+                            <div
+                                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                                onClick={() => {
+                                    if (!isDeleting) {
+                                        setShowDeleteModal(false);
+                                    }
+                                }}
+                            />
 
-                            <div className="w-12 h-12 mx-auto rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl font-semibold">
-                                !
-                            </div>
+                            {/* Modal */}
+                            <motion.div
+                                className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6"
+                                initial={{
+                                    opacity: 0,
+                                    scale: 0.95,
+                                    y: 15
+                                }}
+                                animate={{
+                                    opacity: 1,
+                                    scale: 1,
+                                    y: 0
+                                }}
+                                exit={{
+                                    opacity: 0,
+                                    scale: 0.95,
+                                    y: 15
+                                }}
+                                transition={{
+                                    duration: 0.25,
+                                    ease: "easeOut"
+                                }}
+                            >
 
-                            <div className="text-center mt-4">
+                                <div className="w-12 h-12 mx-auto rounded-full bg-red-50 text-red-500 flex items-center justify-center text-xl font-semibold">
+                                    !
+                                </div>
 
-                                <h2 className="text-lg font-semibold text-gray-800">
-                                    Delete this blog?
-                                </h2>
+                                <div className="text-center mt-4">
 
-                                <p className="text-sm text-gray-500 mt-2 leading-6">
-                                    Are you sure you want to delete
-                                    <span className="font-medium text-gray-700">
-                                        {" "}{blog.title}
-                                    </span>
-                                    ? This action cannot be undone.
-                                </p>
+                                    <h2 className="text-lg font-semibold text-gray-800">
+                                        Delete this blog?
+                                    </h2>
 
-                            </div>
+                                    <p className="text-sm text-gray-500 mt-2 leading-6">
+                                        Are you sure you want to delete
+                                        <span className="font-medium text-gray-700">
+                                            {" "}{blog.title}
+                                        </span>
+                                        ? This action cannot be undone.
+                                    </p>
 
-                            <div className="flex gap-3 mt-6">
+                                </div>
 
-                                <motion.button
-                                    type="button"
-                                    onClick={() => setShowDeleteModal(false)}
-                                    disabled={isDeleting}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="flex-1 cursor-pointer px-4 py-2.5 rounded-full border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Cancel
-                                </motion.button>
+                                <div className="flex gap-3 mt-6">
 
-                                <motion.button
-                                    type="button"
-                                    onClick={deleteBlog}
-                                    disabled={isDeleting}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="flex-1 cursor-pointer px-4 py-2.5 rounded-full bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isDeleting ? "Deleting..." : "Delete Blog"}
-                                </motion.button>
+                                    <motion.button
+                                        type="button"
+                                        onClick={() => setShowDeleteModal(false)}
+                                        disabled={isDeleting}
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        className="flex-1 cursor-pointer px-4 py-2.5 rounded-full border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Cancel
+                                    </motion.button>
 
-                            </div>
+                                    <motion.button
+                                        type="button"
+                                        onClick={deleteBlog}
+                                        disabled={isDeleting}
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        className="flex-1 cursor-pointer px-4 py-2.5 rounded-full bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isDeleting ? "Deleting..." : "Delete Blog"}
+                                    </motion.button>
 
+                                </div>
+
+                            </motion.div>
                         </motion.div>
-
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
         </>
     );
 }

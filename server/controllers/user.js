@@ -7,22 +7,24 @@ import { toFile } from '@imagekit/nodejs';
 import imageKitClient from '../configs/imagekit.js';
 
 import { generateToken } from '../services/auth.js';
-import { createAndSendOTP, verifyOTP } from '../services/otp.js';
+import { createAndSendOTP, verifyOTP } from '../services/otp_service.js';
 import { verifyGoogleToken } from '../services/googleAuth.js';
+import { emailQueue } from '../queues/email_queue.js';
+
+import { deleteCache } from '../utils/cache.js';
 
 // Forgot password
 async function forgotPassword(req, res) {
     try {
         const { email } = req.body;
 
-        if (typeof email !== 'string' || !email.trim()) {
-            return res.status(400).json({
-                message: 'Email is required'
-            });
-        }
-
-        const normalizedEmail = email.trim().toLowerCase();
-        const user = await User.findOne({ email: normalizedEmail });
+        // if (typeof email !== 'string' || !email.trim()) {
+        //     return res.status(400).json({
+        //         message: 'Email is required'
+        //     });
+        // }
+        // const normalizedEmail = email.trim().toLowerCase();
+        const user = await User.findOne({ email: email });
 
         if (!user) {
             return res.status(404).json({
@@ -31,7 +33,7 @@ async function forgotPassword(req, res) {
         }
 
         await createAndSendOTP({
-            email: normalizedEmail,
+            email: email,
             name: user.name,
             purpose: 'reset-password'
         });
@@ -52,16 +54,16 @@ async function verifyForgotPasswordOTP(req, res) {
     try {
         const { email, otp } = req.body;
 
-        if (typeof email !== 'string' || !email.trim() || !otp) {
-            return res.status(400).json({
-                message: 'Email and OTP are required'
-            });
-        }
+        // if (typeof email !== 'string' || !email.trim() || !otp) {
+        //     return res.status(400).json({
+        //         message: 'Email and OTP are required'
+        //     });
+        // }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        // const normalizedEmail = email.trim().toLowerCase();
 
         const isOTPValid = await verifyOTP({
-            email: normalizedEmail,
+            email: email,
             otp,
             purpose: 'reset-password'
         });
@@ -88,18 +90,18 @@ async function resetPassword(req, res) {
     try {
         const { email, password } = req.body;
 
-        if (
-            typeof email !== 'string' ||
-            !email.trim() ||
-            typeof password !== 'string' ||
-            !password
-        ) {
-            return res.status(400).json({
-                message: 'Email and password are required'
-            });
-        }
+        // if (
+        //     typeof email !== 'string' ||
+        //     !email.trim() ||
+        //     typeof password !== 'string' ||
+        //     !password
+        // ) {
+        //     return res.status(400).json({
+        //         message: 'Email and password are required'
+        //     });
+        // }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        // const normalizedEmail = email.trim().toLowerCase();
 
         if (password.length < 6) {
             return res.status(400).json({
@@ -108,7 +110,7 @@ async function resetPassword(req, res) {
         }
 
         const otpRecord = await OTP.findOne({
-            email: normalizedEmail,
+            email: email,
             purpose: 'reset-password',
             verified: true
         });
@@ -119,8 +121,16 @@ async function resetPassword(req, res) {
             });
         }
 
+        // check for OTP expiration
+        if (otpRecord.otpExpiresAt < new Date()) {
+            await OTP.deleteOne({ _id: otpRecord._id });
+            return res.status(400).json({
+                message: 'OTP has expired'
+            });
+        }
+
         const user = await User.findOne({
-            email: normalizedEmail
+            email: email
         });
 
         if (!user) {
@@ -134,17 +144,31 @@ async function resetPassword(req, res) {
         user.password = password;
         await user.save(); // The User model should hash the password in its pre-save hook.
 
+        // password changed email notification
+        try {
+            const job = await emailQueue.add(
+                'sendPasswordChangedEmail',//job name
+                { email, name: user.name },//job data(available in job.data in the worker)
+                {
+                    jobId: `password-changed-${user._id}-${Date.now()}`
+                }
+            );
+            console.log(`Added email job for password-change notification: ${job.id}`);
+        }catch (error) {
+            console.error("Failed to queue password-change email:", error.message);
+        }
+
         await OTP.deleteOne({ _id: otpRecord._id });
 
-        return res.status(200).json({
-            message: 'Password reset successfully'
-        });
-    } catch (error) {
-        console.error('Error resetting password:', error);
-        return res.status(500).json({
-            message: 'Internal server error'
-        });
-    }
+    return res.status(200).json({
+        message: 'Password reset successfully'
+    });
+} catch (error) {
+    console.error('Error resetting password:', error);
+    return res.status(500).json({
+        message: 'Internal server error'
+    });
+}
 }
 
 // Signup
@@ -152,23 +176,7 @@ async function signup(req, res) {
     try {
         let { name, email } = req.body;
 
-        if (
-            typeof name !== 'string' ||
-            !name.trim() ||
-            typeof email !== 'string' ||
-            !email.trim()
-        ) {
-            return res.status(400).json({
-                message: 'Name and email are required'
-            });
-        }
-
-        name = name.trim();
-        email = email.trim().toLowerCase();
-        name = name.charAt(0).toUpperCase() + name.slice(1);
-
         const existingUser = await User.findOne({ email });
-
         if (existingUser) {
             return res.status(409).json({
                 message: 'User already exists'
@@ -197,16 +205,16 @@ async function verifySignupOTP(req, res) {
     try {
         const { email, otp } = req.body;
 
-        if (typeof email !== 'string' || !email.trim() || !otp) {
-            return res.status(400).json({
-                message: 'Email and OTP are required'
-            });
-        }
+        // if (typeof email !== 'string' || !email.trim() || !otp) {
+        //     return res.status(400).json({
+        //         message: 'Email and OTP are required'
+        //     });
+        // }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        // const normalizedEmail = email.trim().toLowerCase();
 
         const isOTPValid = await verifyOTP({
-            email: normalizedEmail,
+            email: email,
             otp,
             purpose: 'signup'
         });
@@ -233,27 +241,27 @@ async function completeSignup(req, res) {
     try {
         const { email, password } = req.body;
 
-        if (
-            typeof email !== 'string' ||
-            !email.trim() ||
-            typeof password !== 'string' ||
-            !password
-        ) {
-            return res.status(400).json({
-                message: 'Email and password are required'
-            });
-        }
+        // if (
+        //     typeof email !== 'string' ||
+        //     !email.trim() ||
+        //     typeof password !== 'string' ||
+        //     !password
+        // ) {
+        //     return res.status(400).json({
+        //         message: 'Email and password are required'
+        //     });
+        // }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        // const normalizedEmail = email.trim().toLowerCase();
 
-        if (password.length < 6) {
-            return res.status(400).json({
-                message: 'Password must be at least 6 characters'
-            });
-        }
+        // if (password.length < 6) {
+        //     return res.status(400).json({
+        //         message: 'Password must be at least 6 characters'
+        //     });
+        // }
 
         const existingUser = await User.findOne({
-            email: normalizedEmail
+            email: email
         });
 
         if (existingUser) {
@@ -263,7 +271,7 @@ async function completeSignup(req, res) {
         }
 
         const otpRecord = await OTP.findOne({
-            email: normalizedEmail,
+            email: email,
             purpose: 'signup',
             verified: true
         });
@@ -274,13 +282,29 @@ async function completeSignup(req, res) {
             });
         }
 
-        await User.create({
+        const newUser = await User.create({
             name: otpRecord.name,
-            email: normalizedEmail,
+            email: email,
             password
         });
 
         await OTP.deleteOne({ _id: otpRecord._id });
+
+        try {
+            const job = await emailQueue.add(
+                'sendWelcomeEmail',//job name
+                { email: newUser.email, name: otpRecord.name },//job data(available in job.data in the worker)
+                {
+                    jobId: `welcome-${newUser._id}-${Date.now()}`,
+                }
+            );
+            console.log(`Added email job for welcome email: ${job.id}`);
+        } catch (error) {
+            // The account already exists; don't report signup failure
+            // just because the email could not be queued.
+            console.error("Failed to queue welcome email:", error.message);
+        }
+
 
         return res.status(201).json({
             message: 'Account created successfully'
@@ -298,30 +322,30 @@ async function signIn(req, res) {
     try {
         const { email, password } = req.body;
 
-        if (
-            typeof email !== 'string' ||
-            !email.trim() ||
-            typeof password !== 'string' ||
-            !password
-        ) {
-            return res.status(400).json({
-                message: 'Email and password are required'
-            });
-        }
+        // if (
+        //     typeof email !== 'string' ||
+        //     !email.trim() ||
+        //     typeof password !== 'string' ||
+        //     !password
+        // ) {
+        //     return res.status(400).json({
+        //         message: 'Email and password are required'
+        //     });
+        // }
 
-        const normalizedEmail = email.trim().toLowerCase();
+        // const normalizedEmail = email.trim().toLowerCase();
 
-        const checkUser = await User.findOne({
-            email: normalizedEmail
+        const existingUser = await User.findOne({
+            email: email
         });
 
-        if (!checkUser) {
+        if (!existingUser) {
             return res.status(401).json({
                 message: 'Invalid email or password'
             });
         }
 
-        const user = await User.matchPassword(normalizedEmail, password);
+        const user = await User.matchPassword(email, password);
 
         if (!user) {
             return res.status(401).json({
@@ -342,7 +366,7 @@ async function signIn(req, res) {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000
+            maxAge: 1 * 24 * 60 * 60 * 1000
         });
 
         return res.status(200).json({
@@ -368,11 +392,11 @@ async function googleSignIn(req, res) {
     try {
         const { googleId_token } = req.body;
 
-        if (!googleId_token) {
-            return res.status(400).json({
-                message: 'Google ID token is required'
-            });
-        }
+        // if (!googleId_token) {
+        //     return res.status(400).json({
+        //         message: 'Google ID token is required'
+        //     });
+        // }
 
         const googleUser = await verifyGoogleToken(googleId_token);
 
@@ -397,6 +421,7 @@ async function googleSignIn(req, res) {
         }
 
         let user = await User.findOne({ googleId });
+        let isNewUser = false;
 
         if (!user) {
             user = await User.findOne({ email });
@@ -416,10 +441,27 @@ async function googleSignIn(req, res) {
                 authProvider: 'google',
                 profileImage
             });
+            isNewUser = true;
         }
 
         user.sessionVersion = (user.sessionVersion || 0) + 1;
         await user.save();
+        if (isNewUser) {
+            try {
+                const job = await emailQueue.add(
+                    'sendWelcomeEmail',//job name
+                    { email: user.email, name: user.name },//job data(available in job.data in the worker)
+                    {
+                        jobId: `welcome-${user._id}-${Date.now()}`,
+                    }
+                );
+                console.log(`Added email job for welcome email: ${job.id}`);
+            } catch (error) {
+                // The account already exists; don't report signup failure
+                // just because the email could not be queued.
+                console.error("Failed to queue Google welcome email:", error.message);
+            }
+        }
 
         const token = generateToken(
             user._id,
@@ -501,7 +543,6 @@ async function editProfile(req, res) {
     try {
         const userId = req.user._id;
         const user = await User.findById(userId);
-
         if (!user) {
             return res.status(404).json({
                 message: 'User not found'
@@ -510,15 +551,17 @@ async function editProfile(req, res) {
 
         let { name } = req.body;
 
-        if (typeof name !== 'string' || !name.trim()) {
-            return res.status(400).json({
-                message: 'Name is required'
-            });
-        }
+        // if (typeof name !== 'string' || !name.trim()) {
+        //     return res.status(400).json({
+        //         message: 'Name is required'
+        //     });
+        // }
 
-        name = name.trim();
-        name = name.charAt(0).toUpperCase() + name.slice(1);
-        user.name = name;
+        // name = name.trim();
+        // name = name.charAt(0).toUpperCase() + name.slice(1);
+        if (name !== undefined) {
+            user.name = name;
+        }
 
         if (req.file) {
             const oldProfileImageFileId = user.profileImageFileId;
@@ -590,13 +633,13 @@ async function requestEmailChange(req, res) {
 
         let { newEmail } = req.body;
 
-        if (typeof newEmail !== 'string' || !newEmail.trim()) {
-            return res.status(400).json({
-                message: 'New email is required'
-            });
-        }
+        // if (typeof newEmail !== 'string' || !newEmail.trim()) {
+        //     return res.status(400).json({
+        //         message: 'New email is required'
+        //     });
+        // }
 
-        newEmail = newEmail.trim().toLowerCase();
+        // newEmail = newEmail.trim().toLowerCase();
 
         if (newEmail === user.email) {
             return res.status(400).json({
@@ -650,17 +693,17 @@ async function verifyEmailChange(req, res) {
 
         let { newEmail, otp } = req.body;
 
-        if (
-            typeof newEmail !== 'string' ||
-            !newEmail.trim() ||
-            !otp
-        ) {
-            return res.status(400).json({
-                message: 'Email and OTP are required'
-            });
-        }
+        // if (
+        //     typeof newEmail !== 'string' ||
+        //     !newEmail.trim() ||
+        //     !otp
+        // ) {
+        //     return res.status(400).json({
+        //         message: 'Email and OTP are required'
+        //     });
+        // }
 
-        newEmail = newEmail.trim().toLowerCase();
+        // newEmail = newEmail.trim().toLowerCase();
 
         const existingUser = await User.findOne({
             email: newEmail
@@ -736,10 +779,13 @@ async function deleteUser(req, res) {
             }
         }
 
-        // Find the user's blogs
+        // Find all blogs created by this user
         const blogs = await Blog.find({
             author: userId
         });
+
+        // Collect IDs of blogs authored by this user
+        const ownedBlogIds = blogs.map(blog => blog._id);
 
         // Delete blog images from ImageKit
         for (const blog of blogs) {
@@ -757,16 +803,30 @@ async function deleteUser(req, res) {
             }
         }
 
+        // Find blogs containing comments written by this user.
+        // These may belong to other authors.
+        const userComments = await Comment.find({
+            createdBy: userId
+        }).select('blogId').lean();
+
+        const commentedBlogIds = userComments.map( comment => comment.blogId );
+
+        // Combine both sets of blog IDs without duplicates
+        const affectedBlogIds = [
+            ...new Set([
+                ...ownedBlogIds.map(id => id.toString()),
+                ...commentedBlogIds.map(id => id.toString())
+            ])
+        ];
+
         // Delete comments written by this user
         await Comment.deleteMany({
             createdBy: userId
         });
 
         // Delete comments belonging to the user's blogs
-        const blogIds = blogs.map(blog => blog._id);
-
         await Comment.deleteMany({
-            blogId: { $in: blogIds }
+            blogId: { $in: ownedBlogIds }
         });
 
         // Delete the user's blogs
@@ -777,9 +837,34 @@ async function deleteUser(req, res) {
         // Delete the user
         await user.deleteOne();
 
+        // Redis Cache invalidation
+        const cacheKeys= [
+            "blogs:all",
+            "admin:blogs",
+            "admin:comments",
+            "dashboard:stats",
+            "myBlogs: ${userId}",
+            
+            // Individual blog caches, including blogs
+            // where the deleted user had written comments.
+            ...affectedBlogIds.map(
+                blogId => `blog:${blogId}`
+            )
+        ];
+
+        // remove all affected cache entries
+        await Promise.all(
+            cacheKeys.map(key=> deleteCache(key))
+        )
+
+        console.log(
+            `Invalidated ${cacheKeys.length} Redis cache entries`
+        );
+
         return res.status(200).json({
             message: 'User deleted successfully'
         });
+
     } catch (error) {
         console.error('Error deleting account:', error);
         return res.status(500).json({

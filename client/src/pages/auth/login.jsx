@@ -5,7 +5,7 @@ import { loginSuccess } from "../../redux/authSlice.js";
 import { GoogleLogin } from "@react-oauth/google";
 import api from "../../api/axios.js";
 import toast from "react-hot-toast";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 
 function Login() {
     const navigate = useNavigate();
@@ -19,6 +19,7 @@ function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formError, setFormError] = useState("");
 
     if (authLoading) {
         return (
@@ -74,6 +75,7 @@ function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setFormError("");
         setIsSubmitting(true);
 
         try {
@@ -88,8 +90,15 @@ function Login() {
                 navigate("/");
             }
         } catch (error) {
-            toast.error(error.response?.data?.message || "Login failed");
-            console.error(error.response?.data?.message || "Login failed");
+            const response = error.response?.data;
+            if (response?.errors?.length > 0) {
+                // Zod validation error: stays visible in the form
+                setFormError(response.errors[0].message);
+            } else {
+                // Business logic / server error: temporary toast
+                toast.error(response?.message || "Login failed");
+            }
+            console.error("Login error:", response?.message || error);
         } finally {
             setIsSubmitting(false);
         }
@@ -107,8 +116,10 @@ function Login() {
                 navigate("/");
             }
         } catch (error) {
-            toast.error(error.response?.data?.message || "Google login failed");
-            console.error(error.response?.data?.message || "Google login failed");
+            const response = error.response?.data;
+            const message = response?.errors?.[0]?.message || response?.message || "Google login failed";
+            toast.error(message);
+            console.error("Google Login error:", message || error);
         }
     }
 
@@ -195,6 +206,22 @@ function Login() {
                             Forgot Password?
                         </Link>
                     </motion.div>
+
+                    <AnimatePresence>
+                        {formError && (
+                            <motion.div
+                                key="form-error"
+                                role="alert"
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.22, ease: "easeOut" }}
+                                className="mb-4 rounded-md border-l-4 border-red-500 bg-red-50 px-3 py-2.5 text-sm text-red-600"
+                            >
+                                {formError}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     <motion.button
                         type="submit"

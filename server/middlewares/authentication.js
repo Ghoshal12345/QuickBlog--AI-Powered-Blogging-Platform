@@ -3,7 +3,6 @@ import User from "../models/user.js";
 
 
 async function cookieAuthentication(req, res, next) {
-
     try {
         const { auth_token } = req.cookies;
         if (!auth_token) {
