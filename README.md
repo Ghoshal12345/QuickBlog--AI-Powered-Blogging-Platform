@@ -259,23 +259,14 @@ The explicit `URL` value is important because the script's fallback URL uses por
 
 ## Screenshots
 
-### Home page
+The application includes public reading views, authentication screens, an author workspace, and an admin dashboard. Add captured images to `docs/screenshots/` and reference them here as the project evolves:
 
-![QuickBlog home page](docs/screenshots/home.jpeg)
+```markdown
+![QuickBlog home page](docs/screenshots/home.png)
+![QuickBlog admin dashboard](docs/screenshots/admin-dashboard.png)
+```
 
-### Blog author workspace
-
-![QuickBlog add blog page](docs/screenshots/add-blog.jpeg)
-
-![QuickBlog my blogs page](docs/screenshots/my-blogs.jpeg)
-
-### Profile
-
-![QuickBlog profile page](docs/screenshots/profile.jpeg)
-
-### Admin dashboard
-
-![QuickBlog admin dashboard](docs/screenshots/admin_dashboard.jpeg)
+For the cleanest GitHub presentation, capture the home page, blog detail page, author editor, and admin dashboard after configuring the local services.
 
 ## Security Notes
 
