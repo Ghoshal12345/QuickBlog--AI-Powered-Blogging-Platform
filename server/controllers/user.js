@@ -282,6 +282,14 @@ async function completeSignup(req, res) {
             });
         }
 
+        // check for OTP expiration
+        if (otpRecord.otpExpiresAt < new Date()) {
+            await OTP.deleteOne({ _id: otpRecord._id });
+            return res.status(400).json({
+                message: 'OTP has expired'
+            });
+        }
+
         const newUser = await User.create({
             name: otpRecord.name,
             email: email,
@@ -843,8 +851,8 @@ async function deleteUser(req, res) {
             "admin:blogs",
             "admin:comments",
             "dashboard:stats",
-            "myBlogs: ${userId}",
-            
+            `myBlogs: ${userId}`,
+
             // Individual blog caches, including blogs
             // where the deleted user had written comments.
             ...affectedBlogIds.map(

@@ -5,7 +5,7 @@ import { Counter } from 'k6/metrics';
 
 const statusCodes = new Counter('http_status_codes');
 
-const url = __ENV.URL || 'http://localhost:8006/api/blog/all';
+const url = __ENV.URL || 'http://localhost:8000/api/blog/all';
 
 export const options = {
     stages: [
